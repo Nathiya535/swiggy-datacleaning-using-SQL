@@ -1,0 +1,292 @@
+select * from swiggy_50;
+SET SQL_SAFE_UPDATES=0; 
+-- Change the NA in rating to 0 use case when clause
+SELECT *
+FROM swiggy_50
+WHERE 'Restaurant_Name' IS NULL or 
+'category' is null or 
+'Rating' is null or 
+'cost for two' is null or
+'veg' is null or
+'city' is null or
+'Area' is null or 
+'Locality' is null or
+'Address' is null or
+'Long Distance delivery' is null;
+
+-- Replace the null values in locality with the area address. Both are almost similar
+-- use below command and another commandn
+select Area, Locality, isnull(Locality, Area)
+from swiggy_50 
+where Locality IS NULL;
+
+UPDATE swiggy_50
+SET locality = ISNULL(locality, Area)
+where Locality IS NULL;
+
+-- Replace the null values in Address with the area and city
+select city,Area, Locality,Address, isnull(Address, concat(Area,",",city))
+from swiggy_50 
+where Address IS NULL;
+
+-- using isnull
+Update swiggy_50
+SET Address =isnull(Address, concat(Area,',',city))
+where Address IS NULL;
+
+
+--using COALESCE
+UPDATE swiggy_50 
+SET Address = COALESCE(Address, CONCAT(Area,',', city)) 
+WHERE Address IS NULL;
+
+-- Split the category into 2 columns category, sub category
+Select 
+Substring(Category, 1 , CHARINDEX(',', Category)) as Maincategory, 
+substring(category, CHARINDEX(',',category) +1, LEN(category)) AS subcategory
+from swiggy_50;
+
+Select * from swiggy_50;
+
+Alter table swiggy_50
+add Maincategory char(255);
+
+
+update swiggy_50
+set Maincategory = Substring(Category, 1 , CHARINDEX(',', Category));
+
+-- Add a column sub category
+Alter table swiggy_50
+add subcategory char(255);
+
+update swiggy_50
+set subcategory = substring(category, CHARINDEX(',',category) +1, LEN(category));
+
+
+-- Split the address to get the last part of address where we can know the city
+
+
+select
+Substring(Address, 1 , CHARINDEX(',', Address)) as Mainaddress,
+substring(Address, CHARINDEX(',',Address) +1, LEN(Address)) AS subaddress
+from swiggy_50;
+
+----- substring(STORE_NUMBER, Start_Position_Number, Length) as SortNumber1
+--select Address,substring_index(Address,",",-1)
+--from swiggy_50;
+
+Alter table swiggy_50
+add Split_address_city_state char (255);
+
+Update swiggy_50
+set Split_address_city_state = Substring(Address, 1 , CHARINDEX(',', Address));
+
+-- Change long distance delievry to yes / no
+
+select distinct (Long_Distance_Delivery), COUNT(Long_Distance_Delivery)
+from swiggy_50
+	group by Long_Distance_Delivery
+	order by 2
+
+Select Long_Distance_Delivery,
+case 
+when Long_Distance_Delivery = 0 then 'No'
+when Long_Distance_Delivery = 1 then 'Yes'
+else 'NA'
+end
+from swiggy_50;
+
+ALTER TABLE swiggy_50 
+ALTER COLUMN Long_Distance_Delivery VARCHAR(3)
+
+UPDATE swiggy_50 
+SET Long_Distance_Delivery = 
+  CASE 
+    WHEN Long_Distance_Delivery = 0 THEN 'No'
+    WHEN Long_Distance_Delivery = 1 THEN 'Yes'
+    ELSE NULL 
+  END
+  select Long_Distance_Delivery from swiggy_50
+
+
+
+
+
+
+
+
+-- -- Change the Ratings to words like poor, avg, very good, excellent
+
+-- Change the NA to median in Rating - Kaggle queries and solns
+-- The 'rating' column seems to have more than 50% of the data as NaN. 
+-- Since, 'rating' might is a crucial role in the analysis, 
+-- I was thinking of finding out an algorithm to input the missing data. 
+
+-- ans you can replace the missing values with the already existing values of the attribute
+-- either median or any value of our choice or 
+-- predicted value - for example you can use logistic regression to input missing values.
+
+-- Inputing 50 percent of the values can skew the data what to do then
+-- Perhaps you could try to create two variables:
+-- use one variable with imputed values and then without them and see, 
+-- which variable has better performance. 
+
+select * from swiggy_50
+
+
+ALTER TABLE swiggy_50 
+ALTER COLUMN Rating VARCHAR(MAX)
+
+-- Update swiggy_50
+-- set `Rating` = replace(`Rating`, "-1","NA");
+
+SELECT 
+  Rating, 
+  ROW_NUMBER() OVER (PARTITION BY Rating ORDER BY Rating) AS Rank
+FROM 
+  swiggy_50;
+
+  SELECT 
+  Rating, 
+  ROW_NUMBER() OVER (PARTITION BY Rating ORDER BY (SELECT NULL)) AS Rank
+FROM 
+  swiggy_50;
+
+  DECLARE @rowindex INT
+SET @rowindex = -1
+
+  Select avg(Rating) as Median
+from
+(select @rowindex:=@rowindex +1 as rowindex,swiggy_50.Rating as Rating
+from swiggy_50
+order by swiggy_50.Rating) AS R
+Where
+R.rowindex IN (FLOOR(@rowindex / 2), CEIL(@rowindex / 2));
+
+--Here's an alternative way to calculate the median:
+
+
+SELECT AVG(CAST(Rating AS DECIMAL(10, 2))) AS Median 
+FROM ( 
+  SELECT Rating, 
+         ROW_NUMBER() OVER (ORDER BY CAST(Rating AS DECIMAL(10, 2))) AS rowindex,   
+         COUNT(*) OVER () AS totalrows 
+  FROM swiggy_50 
+) AS R 
+WHERE rowindex IN ((totalrows + 1) / 2, (totalrows + 2) / 2)
+
+
+--SELECT AVG(CAST(Rating AS DECIMAL(10, 2))) -- converts the Rating column to a decimal type with a maximum of
+--10 digits and 2 decimal places
+--ROW_NUMBER() OVER (ORDER BY CAST(Rating AS DECIMAL(10, 2))) --Assigns a unique row number to each row, ordered by 
+--the Rating value.
+ --COUNT(*) OVER () Counts the total number of rows in the table.
+select * from swiggy_50
+select rating from swiggy_50
+
+Alter table swiggy_50
+add Rating_withNA char (255);
+-- Now the median is 0 so you can assign 0 to NA values in rating
+-- Rating_withNA has median 0 instead of NA
+
+-- Replace NA with 0 as the median is 0
+ALTER TABLE swiggy_50 Alter column  Rating DECIMAL;
+
+Update swiggy_50
+set Rating = replace(Rating, 'NA','0');
+
+update swiggy_50
+set Rating_withNA = case
+when Rating >= 0  and Rating <=2 then 'Poor'
+when Rating >= 2.5 and Rating <=3.5 then 'Average'
+when Rating >=4and Rating <=4.5 then 'Very good'
+when Rating = 5 then 'Excellent'
+else 'Not_Available'
+end;
+
+
+-- Keep NA values as such
+-- Rating_words has not available as such
+SELECT MAX(RATING)
+FROM swiggy_50;
+
+SELECT MIN(RATING)
+FROM swiggy_50;
+
+Alter table swiggy_50
+add Rating_words char (255);
+
+ALTER TABLE swiggy_50 Alter column Rating Decimal;
+
+Update swiggy_50
+set Rating = replace(Rating, 'NULL',-1);
+
+
+UPDATE swiggy_50 
+SET Rating_words = 
+    CASE 
+        WHEN Rating = '-1' THEN 'Not_Available'
+        WHEN CAST(Rating AS DECIMAL(10, 2)) BETWEEN 0 AND 2 THEN 'Poor'
+        WHEN CAST(Rating AS DECIMAL(10, 2)) BETWEEN 2.5 AND 3.5 THEN 'Average'
+        WHEN CAST(Rating AS DECIMAL(10, 2)) BETWEEN 4 AND 4.5 THEN 'Very good'
+        WHEN CAST(Rating AS DECIMAL(10, 2)) = 5 THEN 'Excellent'
+        ELSE 'Unknown'
+    END;
+
+	-- Change cost for two to cheap,Affordable,Budget friendly,High price,Very expensive
+
+SELECT *
+FROM swiggy_50;
+
+SELECT Min(Cost_for_two)
+FROM swiggy_50;
+
+SELECT Max(Cost_for_two)
+FROM swiggy_50;
+SELECT avg(Cost_for_two)
+FROM swiggy_50;
+
+select distinct(Cost_for_two), count(Cost_for_two) as C
+-- row_number() over (partition by `cost for two`) as `Rank`
+from swiggy_50
+group by 1
+order by C;
+
+SELECT 
+  distinct(Cost_for_two), 
+  COUNT(Cost_for_two) AS C
+FROM 
+  swiggy_50
+GROUP BY 
+  Cost_for_two
+ORDER BY 
+  C  desc;
+
+  select * from swiggy_50
+  select Restaurant_Name, Cost_for_two from swiggy_50
+  where Cost_for_two = 799;
+
+  Alter table swiggy_50
+add Budget_type char (255);
+ALTER TABLE swiggy_50 
+ALTER COLUMN Budget_type 
+varchar(255);
+
+Update swiggy_50
+set Budget_type =
+case
+when cast(Cost_for_two AS DECIMAL(10,2)) <= 620 then 'cheap cost_for_two<=620'
+when CAST(Cost_for_two AS DECIMAL(10,2)) <= 1240 then 'Affordable cost_for_two<=1240'
+when CAST(Cost_for_two AS DECIMAL(10,2))  <= 1860 then 'Budget friendly cost_for_two<=1860'
+when CAST(Cost_for_two AS DECIMAL(10,2)) <= 2480 then 'High price cost_for_two<=2480'
+when CAST(Cost_for_two AS DECIMAL(10,2)) > 2481 then 'very expensive cost_for_two>2481'
+else 'Cost_for_two'
+end;
+
+-- Drop unnecessary columns
+select * 
+from swiggy_50;
+
+Alter table swiggy_50
+drop column Category,
+drop column Split_address_city_state;
